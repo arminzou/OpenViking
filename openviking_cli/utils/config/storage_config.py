@@ -51,7 +51,7 @@ class StorageConfig(BaseModel):
             )
 
         # Update paths to use workspace
-        workspace_path = Path(self.workspace).resolve()
+        workspace_path = Path(self.workspace).expanduser().resolve()
         workspace_path.mkdir(parents=True, exist_ok=True)
         self.workspace = str(workspace_path)
         self.agfs.path = self.workspace
@@ -65,7 +65,7 @@ class StorageConfig(BaseModel):
         Returns:
             Path to {workspace}/temp/upload directory
         """
-        workspace_path = Path(self.workspace).resolve()
+        workspace_path = Path(self.workspace).expanduser().resolve()
         upload_temp_dir = workspace_path / "temp" / "upload"
         upload_temp_dir.mkdir(parents=True, exist_ok=True)
         return upload_temp_dir
