@@ -46,6 +46,7 @@ try:
         P2ImMessageReceiveV1,
         ReplyMessageRequest,
         ReplyMessageRequestBody,
+        DeleteMessageReactionRequest
     )
 
     FEISHU_AVAILABLE = True
@@ -174,7 +175,7 @@ class FeishuChannel(BaseChannel):
         # Handle failed response
         if not response.success():
             raise Exception(
-                f"Failed to download image: code={response.code}, msg={response.msg}, log_id={response.get_log_id()}"
+                f"Failed to download image: code={response.code}, msg={response.raw.content}, log_id={response.get_log_id()}"
             )
 
         # Read the image bytes from the response file
@@ -211,28 +212,6 @@ class FeishuChannel(BaseChannel):
             logger.warning(f"Error getting chat mode: {e}")
 
         return "group"  # 失败默认普通群
-
-    async def _get_bot_open_id(self) -> str:
-        """获取机器人自身的open_id"""
-        if self._bot_open_id:
-            return self._bot_open_id
-
-        if not self._client:
-            return ""
-
-        try:
-            # 调用获取自己身份的接口
-            from lark_oapi.api.contact.v3 import GetUserRequest
-            request = GetUserRequest.builder().user_id("me").user_id_type("open_id").build()
-            response = await self._client.contact.v3.user.aget(request)
-            if response.success():
-                self._bot_open_id = response.data.user.open_id
-                return self._bot_open_id
-            logger.warning(f"Failed to get bot open_id: {response.msg}")
-        except Exception as e:
-            logger.warning(f"Error getting bot open_id: {e}")
-
-        return ""
 
     async def start(self) -> None:
         """Start the Feishu bot with WebSocket long connection."""
@@ -681,10 +660,7 @@ class FeishuChannel(BaseChannel):
             chat_type = message.chat_type  # "p2p" or "group"
             msg_type = message.message_type
 
-            # Add reaction to indicate "seen"
-            await self._add_reaction(message_id, "MeMeMe")
-
-            # Parse message content and media
+            # Parse message content and media first to check mentions
             content = ""
             media = []
 
@@ -772,45 +748,51 @@ class FeishuChannel(BaseChannel):
             # 检查是否@了机器人
             is_mentioned = False
             mention_pattern = re.compile(r"@_user_\d+")
+            bot_open_id = self.config.open_id
+            bot_app_id = self.config.app_id
 
-            # 处理post类型消息，提取@信息
-            if msg_type == "post":
-                try:
-                    msg_content = json.loads(message.content)
-                    post_content = msg_content.get("content", [])
-                    bot_open_id = await self._get_bot_open_id()
-
-                    for block in post_content:
-                        for element in block:
-                            if element.get("tag") == "at":
-                                at_user_id = element.get("user_id")
-                                if at_user_id == bot_open_id:
-                                    is_mentioned = True
-                                # 替换@占位符为真实用户ID
-                                if at_user_id and element.get("user_name"):
-                                    content = content.replace(f"@{element.get('user_name')}", f"@{at_user_id}")
-                except Exception as e:
-                    logger.warning(f"Failed to parse post mentions: {e}")
-            else:
-                # 文本类型消息，检查是否有@机器人的占位符
-                bot_open_id = await self._get_bot_open_id()
-                if f"@{bot_open_id}" in content or "@_user_" in content:
-                    # 临时判断：文本消息中包含@格式的都认为是@机器人，后续可以优化
-                    is_mentioned = True
-
-            # 替换所有@占位符
-            content = mention_pattern.sub(f"@{sender_id}", content)
+            # 优先从message的mentions字段提取@信息（text和post类型都适用）
+            if hasattr(message, 'mentions') and message.mentions and bot_open_id:
+                for mention in message.mentions:
+                    if hasattr(mention, 'id') and hasattr(mention.id, 'open_id'):
+                        at_id = mention.id.open_id
+                        if at_id == bot_open_id:
+                            is_mentioned = True
+                            break
+                    # 兼容其他可能的ID格式
+                    at_id = getattr(mention, 'id', '') or getattr(mention, 'user_id', '')
+                    if at_id == f"app_{bot_app_id}" or at_id == bot_app_id:
+                        is_mentioned = True
+                        break
 
             # 话题群@检查逻辑
-            if chat_type == "group" and self.config.thread_require_mention:
+            should_process = True
+            if chat_type == "group":
                 chat_mode = await self._get_chat_mode(chat_id)
                 if chat_mode == "thread":
                     # 判断是否是话题的首条消息（root_id等于message_id说明是话题发起消息）
                     is_topic_starter = message.root_id == message.message_id or not message.root_id
-                    if not is_topic_starter and not is_mentioned:
-                        # 非话题首条消息且没有@机器人，跳过处理
-                        logger.info(f"Skipping thread message: not topic starter and not mentioned")
-                        return
+
+                    if self.config.thread_require_mention:
+                        # 模式1：默认True，所有消息都需要@才处理
+                        if not is_mentioned:
+                            logger.info(f"Skipping thread message: thread_require_mention is True and not mentioned")
+                            should_process = False
+                    else:
+                        # 模式2：False，仅话题首条消息不需要@，后续回复需要@
+                        if not is_topic_starter and not is_mentioned:
+                            logger.info(f"Skipping thread message: not topic starter and not mentioned")
+                            should_process = False
+
+            # 不需要处理的消息直接跳过
+            if not should_process:
+                return
+
+            # 确认需要处理后再添加"已读"表情
+            await self._add_reaction(message_id, "MeMeMe")
+
+            # 替换所有@占位符
+            content = mention_pattern.sub(f"@{sender_id}", content)
 
             # Forward to message bus
             reply_to = chat_id if chat_type == "group" else sender_id
