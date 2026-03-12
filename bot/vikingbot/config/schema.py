@@ -108,6 +108,7 @@ class FeishuChannelConfig(BaseChannelConfig):
     encrypt_key: str = ""
     verification_token: str = ""
     allow_from: list[str] = Field(default_factory=list)  ## 允许更新Agent对话的Feishu用户ID列表
+    thread_require_mention: bool = Field(default=False, description="话题群模式下是否需要@才响应：开启后，仅话题首条消息无需@，后续回复必须@机器人才处理")
 
     def channel_id(self) -> str:
         # Use app_id directly as the ID

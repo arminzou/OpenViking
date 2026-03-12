@@ -99,6 +99,7 @@ class FeishuChannel(BaseChannel):
         self._tenant_access_token: str | None = None
         self._token_expire_time: float = 0
         self._chat_mode_cache: dict[str, str] = {}  # 缓存群类型：group(普通群)/thread(话题群)
+        self._bot_open_id: str | None = None  # 机器人自身的open_id
 
     async def _get_tenant_access_token(self) -> str:
         """Get tenant access token for Feishu API."""
@@ -210,6 +211,28 @@ class FeishuChannel(BaseChannel):
             logger.warning(f"Error getting chat mode: {e}")
 
         return "group"  # 失败默认普通群
+
+    async def _get_bot_open_id(self) -> str:
+        """获取机器人自身的open_id"""
+        if self._bot_open_id:
+            return self._bot_open_id
+
+        if not self._client:
+            return ""
+
+        try:
+            # 调用获取自己身份的接口
+            from lark_oapi.api.contact.v3 import GetUserRequest
+            request = GetUserRequest.builder().user_id("me").user_id_type("open_id").build()
+            response = await self._client.contact.v3.user.aget(request)
+            if response.success():
+                self._bot_open_id = response.data.user.open_id
+                return self._bot_open_id
+            logger.warning(f"Failed to get bot open_id: {response.msg}")
+        except Exception as e:
+            logger.warning(f"Error getting bot open_id: {e}")
+
+        return ""
 
     async def start(self) -> None:
         """Start the Feishu bot with WebSocket long connection."""
@@ -746,8 +769,48 @@ class FeishuChannel(BaseChannel):
 
             import re
 
+            # 检查是否@了机器人
+            is_mentioned = False
             mention_pattern = re.compile(r"@_user_\d+")
+
+            # 处理post类型消息，提取@信息
+            if msg_type == "post":
+                try:
+                    msg_content = json.loads(message.content)
+                    post_content = msg_content.get("content", [])
+                    bot_open_id = await self._get_bot_open_id()
+
+                    for block in post_content:
+                        for element in block:
+                            if element.get("tag") == "at":
+                                at_user_id = element.get("user_id")
+                                if at_user_id == bot_open_id:
+                                    is_mentioned = True
+                                # 替换@占位符为真实用户ID
+                                if at_user_id and element.get("user_name"):
+                                    content = content.replace(f"@{element.get('user_name')}", f"@{at_user_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to parse post mentions: {e}")
+            else:
+                # 文本类型消息，检查是否有@机器人的占位符
+                bot_open_id = await self._get_bot_open_id()
+                if f"@{bot_open_id}" in content or "@_user_" in content:
+                    # 临时判断：文本消息中包含@格式的都认为是@机器人，后续可以优化
+                    is_mentioned = True
+
+            # 替换所有@占位符
             content = mention_pattern.sub(f"@{sender_id}", content)
+
+            # 话题群@检查逻辑
+            if chat_type == "group" and self.config.thread_require_mention:
+                chat_mode = await self._get_chat_mode(chat_id)
+                if chat_mode == "thread":
+                    # 判断是否是话题的首条消息（root_id等于message_id说明是话题发起消息）
+                    is_topic_starter = message.root_id == message.message_id or not message.root_id
+                    if not is_topic_starter and not is_mentioned:
+                        # 非话题首条消息且没有@机器人，跳过处理
+                        logger.info(f"Skipping thread message: not topic starter and not mentioned")
+                        return
 
             # Forward to message bus
             reply_to = chat_id if chat_type == "group" else sender_id
