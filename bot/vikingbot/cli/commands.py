@@ -193,28 +193,9 @@ def main(
 
 
 def _make_provider(config, langfuse_client: None = None):
-    """Create LiteLLMProvider from config. Allows starting without API key."""
-    from vikingbot.providers.litellm_provider import LiteLLMProvider
-
-    config = load_config()
-    p = config.agents
-
-    model = p.model
-    api_key = p.api_key if p else None
-    api_base = p.api_base if p else None
-    provider_name = p.provider if p else None
-
-    if not (api_key) and not model.startswith("bedrock/"):
-        console.print("[yellow]Warning: No API key configured.[/yellow]")
-        console.print("You can configure providers later in the Console UI.")
-
-    return LiteLLMProvider(
-        api_key=api_key,
-        api_base=api_base,
-        default_model=model,
-        extra_headers=p.extra_headers if p else None,
-        provider_name=provider_name,
-        # langfuse_client=langfuse_client,
+    """LiteLLM-backed bot provider is temporarily disabled."""
+    raise RuntimeError(
+        "vikingbot is temporarily unavailable because its LiteLLM backend has been disabled for security reasons"
     )
 
 
@@ -443,7 +424,6 @@ def prepare_channel(
 def prepare_heartbeat(config, agent_loop, session_manager) -> HeartbeatService:
     # Create heartbeat service
     async def on_heartbeat(prompt: str, session_key: SessionKey | None = None) -> str:
-
         return await agent_loop.process_direct(
             prompt,
             session_key=session_key,

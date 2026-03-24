@@ -3,12 +3,12 @@
 """
 Provider Registry — single source of truth for LLM provider metadata.
 
-Supported providers: volcengine, openai, litellm
+Supported providers: volcengine, openai
 """
 
 from __future__ import annotations
 
-VALID_PROVIDERS: tuple[str, ...] = ("volcengine", "openai", "litellm")
+VALID_PROVIDERS: tuple[str, ...] = ("volcengine", "openai")
 
 
 def get_all_provider_names() -> list[str]:
