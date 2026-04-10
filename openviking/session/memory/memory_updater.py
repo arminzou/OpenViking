@@ -9,11 +9,12 @@ to the storage system.
 
 from typing import Any, Dict, List, Optional, Tuple
 
+from openviking.core.namespace import agent_space_fragment, user_space_fragment
 from openviking.message import Message
 from openviking.server.identity import RequestContext
 from openviking.session.memory.dataclass import MemoryField
 from openviking.session.memory.memory_type_registry import MemoryTypeRegistry
-from openviking.session.memory.merge_op import MergeOpFactory, PatchOp
+from openviking.session.memory.merge_op import MergeOpFactory
 from openviking.session.memory.utils import (
     deserialize_full,
     flat_model_to_dict,
@@ -271,8 +272,8 @@ class MemoryUpdater:
             raise ValueError("MemoryTypeRegistry is required for URI resolution")
 
         # Get actual user/agent space from ctx
-        user_space = ctx.user.user_space_name() if ctx and ctx.user else "default"
-        agent_space = ctx.user.agent_space_name() if ctx and ctx.user else "default"
+        user_space = user_space_fragment(ctx) if ctx and ctx.user else "default"
+        agent_space = agent_space_fragment(ctx) if ctx and ctx.user else "default"
 
         # Resolve all URIs first (pass extract_context for template rendering)
         resolved_ops = resolve_all_operations(

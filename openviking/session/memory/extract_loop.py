@@ -10,6 +10,7 @@ import asyncio
 import json
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from openviking.core.namespace import agent_space_fragment, user_space_fragment
 from openviking.models.vlm.base import VLMBase
 from openviking.server.identity import RequestContext
 from openviking.session.memory.schema_model_generator import (
@@ -175,6 +176,7 @@ The final output of the model must strictly follow the JSON Schema format shown 
         for msg in tool_call_messages:
             if msg.get("role") == "user" and "tool_call_name" in msg.get("content", ""):
                 import json
+
                 try:
                     content = json.loads(msg.get("content", "{}"))
                     if content.get("tool_call_name") == "read":
@@ -203,9 +205,7 @@ The final output of the model must strictly follow the JSON Schema format shown 
             # Call LLM with tools - model decides: tool calls OR final operations
             pretty_print_messages(messages)
 
-            tool_calls, operations = await self._call_llm(
-                messages
-            )
+            tool_calls, operations = await self._call_llm(messages)
 
             if tool_calls:
                 has_unknown_tool = await self._execute_tool_calls(messages, tool_calls, tools_used)
@@ -268,6 +268,7 @@ The final output of the model must strictly follow the JSON Schema format shown 
             True if any tool call returned "Unknown tool" error, indicating
             the model should not receive tools in the next iteration.
         """
+
         # Execute all tool calls in parallel
         async def execute_single_tool_call(idx: int, tool_call):
             """Execute a single tool call."""
@@ -336,8 +337,8 @@ The final output of the model must strictly follow the JSON Schema format shown 
             operations,
             schemas,
             registry,
-            user_space=self.ctx.user.user_space_name(),
-            agent_space=self.ctx.user.agent_space_name(),
+            user_space=user_space_fragment(self.ctx),
+            agent_space=agent_space_fragment(self.ctx),
             extract_context=self._extract_context,
         )
         if not is_valid:
@@ -346,8 +347,7 @@ The final output of the model must strictly follow the JSON Schema format shown 
             raise ValueError(error_msg)
 
     async def _call_llm(
-        self,
-        messages: List[Dict[str, Any]]
+        self, messages: List[Dict[str, Any]]
     ) -> Tuple[Optional[List], Optional[Any]]:
         """
         Call LLM with tools. Returns either tool calls OR final operations.
@@ -499,8 +499,8 @@ The final output of the model must strictly follow the JSON Schema format shown 
                     uri = resolve_flat_model_uri(
                         item_dict,
                         registry,
-                        user_space=self.ctx.user.user_space_name(),
-                        agent_space=self.ctx.user.agent_space_name(),
+                        user_space=user_space_fragment(self.ctx),
+                        agent_space=agent_space_fragment(self.ctx),
                         memory_type=field_name,
                         extract_context=self._extract_context,
                     )
