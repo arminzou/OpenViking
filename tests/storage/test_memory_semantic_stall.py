@@ -131,6 +131,62 @@ async def test_memory_ls_error_reports_error():
 
 
 @pytest.mark.asyncio
+async def test_memory_ls_transient_error_requeues():
+    """Transient errors during ls() re-enqueue the msg and increment requeue count.
+
+    A 500-class error wrapped by the processor's `raise RuntimeError(...) from e`
+    is classified as `transient`. The outer on_dequeue() path must call
+    _reenqueue_semantic_msg(), bump requeue_count, and fire both report_requeue()
+    and report_success() — not report_error().
+    """
+    processor = SemanticProcessor()
+
+    fake_fs = MagicMock()
+    fake_fs.ls = AsyncMock(side_effect=RuntimeError("500 Internal Server Error"))
+
+    msg = _make_msg(telemetry_id="tel-1")
+    data = _build_data(msg)
+
+    success_called = False
+    requeue_called = False
+    error_called = False
+
+    def on_success():
+        nonlocal success_called
+        success_called = True
+
+    def on_requeue():
+        nonlocal requeue_called
+        requeue_called = True
+
+    def on_error(error_msg, error_data=None):
+        nonlocal error_called
+        error_called = True
+
+    processor.set_callbacks(on_success, on_requeue, on_error)
+
+    reenqueue_mock = AsyncMock()
+
+    with (
+        patch(
+            "openviking.storage.queuefs.semantic_processor.get_viking_fs",
+            return_value=fake_fs,
+        ),
+        patch(
+            "openviking.storage.queuefs.semantic_processor.resolve_telemetry",
+            return_value=None,
+        ),
+        patch.object(processor, "_reenqueue_semantic_msg", new=reenqueue_mock),
+    ):
+        await processor.on_dequeue(data)
+
+    assert requeue_called, "report_requeue() must fire for transient errors"
+    assert success_called, "report_success() must fire after successful re-enqueue"
+    assert not error_called, "report_error() must NOT fire for transient errors"
+    reenqueue_mock.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_memory_write_error_reports_error():
     """When abstract/overview write raises PermissionError, report_error() is called.
 
