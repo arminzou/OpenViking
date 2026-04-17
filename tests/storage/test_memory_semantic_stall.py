@@ -64,7 +64,7 @@ async def test_memory_empty_dir_still_reports_success():
         nonlocal error_called
         error_called = True
 
-    processor.set_callbacks(on_success, on_error)
+    processor.set_callbacks(on_success, lambda: None, on_error)
 
     with (
         patch(
@@ -111,7 +111,7 @@ async def test_memory_ls_error_reports_error():
         error_called = True
         error_info["msg"] = error_msg
 
-    processor.set_callbacks(on_success, on_error)
+    processor.set_callbacks(on_success, lambda: None, on_error)
 
     with (
         patch(
@@ -161,7 +161,7 @@ async def test_memory_write_error_reports_error():
         error_called = True
         error_info["msg"] = error_msg
 
-    processor.set_callbacks(on_success, on_error)
+    processor.set_callbacks(on_success, lambda: None, on_error)
 
     with (
         patch(
