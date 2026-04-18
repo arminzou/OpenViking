@@ -282,7 +282,7 @@ def gateway(
         # Start uvicorn server for OpenAPI
         config_uvicorn = uvicorn.Config(
             fastapi_app,
-            host="0.0.0.0",
+            host=config.gateway.host,
             port=port,
             log_level="info",
         )

@@ -480,7 +480,7 @@ class HeartbeatConfig(BaseModel):
 class GatewayConfig(BaseModel):
     """Gateway/server configuration."""
 
-    host: str = "0.0.0.0"
+    host: str = "127.0.0.1"
     port: int = 18790
 
 
