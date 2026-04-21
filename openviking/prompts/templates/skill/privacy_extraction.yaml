@@ -1,0 +1,58 @@
+metadata:
+  id: "skill.privacy_extraction"
+  name: "Skill Privacy Extraction"
+  description: "Extract sensitive config values from skill content as structured JSON"
+  version: "1.0.0"
+  language: "en"
+  category: "skill"
+
+variables:
+  - name: "skill_name"
+    type: "string"
+    description: "Skill name"
+    required: true
+  - name: "skill_description"
+    type: "string"
+    description: "Skill description"
+    required: true
+  - name: "skill_content"
+    type: "string"
+    description: "Complete skill content"
+    required: true
+
+template: |
+  Analyze the following skill content and extract only user-private configuration values that should be moved into the privacy config store.
+
+  ## Skill Information
+  **Name**: {{ skill_name }}
+  **Description**: {{ skill_description }}
+
+  ## Complete Content
+  {{ skill_content }}
+
+  ## Extraction Rules
+  - Extract only explicit concrete values that appear in the content.
+  - Focus on sensitive or user-private config fields, especially:
+    - api_key
+    - token
+    - ak
+    - sk
+    - access_key
+    - secret_key
+    - client_secret
+    - base_url
+  - Do not invent values.
+  - Do not normalize, mask, or redact values.
+  - If a field is absent, omit it.
+  - If no sensitive config is present, return an empty object.
+
+  ## Output Format
+  Return JSON only, in exactly this shape:
+  {
+    "values": {
+      "field_name": "raw value"
+    }
+  }
+
+llm_config:
+  temperature: 0.0

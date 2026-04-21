@@ -72,6 +72,11 @@ PRESET_DIRECTORIES: Dict[str, DirectoryDefinition] = {
                     ),
                 ],
             ),
+            DirectoryDefinition(
+                path="privacy_configs",
+                abstract="User privacy config root. Stores user-scoped sensitive configuration snapshots by category and target key.",
+                overview="Use this directory to access privacy-managed configuration values such as skill secrets. Concrete category and target-key subdirectories are created lazily by the privacy config service.",
+            ),
         ],
     ),
     "agent": DirectoryDefinition(
