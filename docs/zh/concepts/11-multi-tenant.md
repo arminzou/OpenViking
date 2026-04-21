@@ -41,9 +41,9 @@ OpenViking 的多租户不是“为每个团队部署一套独立服务”，而
 
 `agent_id` 用于区分 agent 级空间。
 
-- 默认模式下，agent space 由 `user_id + agent_id` 共同决定
-- 这意味着同一用户的不同 agent 可以拥有不同 agent 记忆
-- 如果 `memory.agent_scope_mode = "agent"`，则同一 `agent_id` 可在同 account 内跨用户共享 agent 空间
+- Agent URI 形状由 account 级 namespace policy 决定
+- `isolate_agent_scope_by_user = false` 时使用 `viking://agent/{agent_id}/...`
+- `isolate_agent_scope_by_user = true` 时使用 `viking://agent/{agent_id}/user/{user_id}/...`
 
 ### 角色
 
@@ -84,7 +84,7 @@ OpenViking Server 支持两种多租户相关认证模式：
 |----------|---------------------|-------------------|--------------|
 | `resources` | 否 | 是 | account |
 | `user` | 否 | 否 | user |
-| `agent` | 否 | 视 `memory.agent_scope_mode` 而定 | 默认 `user + agent` |
+| `agent` | 否 | 由 account 级 namespace policy 决定 | 默认 `agent` |
 | `session` | 否 | 否 | user / session |
 
 ### 存储层
@@ -202,7 +202,7 @@ openclaw config set plugins.entries.openviking.config.agentId "<agent-id>"
 
 - 接入简单，插件不需要管理 account/user 生命周期
 - 最适合“一个 OpenClaw 实例对应一个 OpenViking 用户”的场景
-- `agentId` 决定 agent 级空间，便于区分不同 OpenClaw 实例或不同 agent 角色
+- `agentId` 参与决定 agent 级空间，便于区分不同 OpenClaw 实例或不同 agent 角色
 - 同一 account 内的 `resources` 可共享，`user` / `agent` memory 会按身份隔离
 
 ### OpenClaw 插件为何通常不配 `account` / `user`
