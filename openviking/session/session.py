@@ -594,7 +594,6 @@ class Session:
                     summary = await self._generate_archive_summary_async(
                         messages,
                         latest_archive_overview=latest_archive_overview,
-                        archive_uri=archive_uri,
                     )
                     if self._viking_fs and summary:
                         abstract = self._extract_abstract_from_summary(summary)
