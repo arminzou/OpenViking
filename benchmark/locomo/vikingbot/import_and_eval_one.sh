@@ -14,6 +14,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SKIP_IMPORT=false
 SINGLE_CHAT=false
+AUTO_COMMIT=false
 
 if command -v python3 >/dev/null 2>&1; then
     PYTHON_BIN="python3"
@@ -86,13 +87,15 @@ for arg in "$@"; do
         SKIP_IMPORT=true
     elif [ "$arg" = "--single-chat" ]; then
         SINGLE_CHAT=true
+    elif [ "$arg" = "--auto-commit" ]; then
+        AUTO_COMMIT=true
     fi
 done
 
-# 过滤掉 --skip-import 和 --single-chat 获取实际参数
+# 过滤掉 --skip-import、--single-chat 和 --auto-commit 获取实际参数
 ARGS=()
 for arg in "$@"; do
-    if [ "$arg" != "--skip-import" ] && [ "$arg" != "--single-chat" ]; then
+    if [ "$arg" != "--skip-import" ] && [ "$arg" != "--single-chat" ] && [ "$arg" != "--auto-commit" ]; then
         ARGS+=("$arg")
     fi
 done
@@ -113,6 +116,7 @@ if [ -z "$SAMPLE" ]; then
     echo "  question_index: 问题索引 (可选)，不传则测试该 sample 的所有问题"
     echo "  --skip-import: 跳过导入步骤，直接使用已导入的数据进行评测"
     echo "  --single-chat: 单聊模式，不设置 role_id/speaker，不传 --memory-user"
+    echo "  --auto-commit: 自动提交未提交的代码变更，结果文件名带 commit id 和时间戳"
     exit 1
 fi
 
@@ -149,6 +153,19 @@ PY
     echo "Using sample_id: $SAMPLE (index: $SAMPLE_INDEX)"
 fi
 
+# auto-commit 逻辑
+if [ "$AUTO_COMMIT" = "true" ]; then
+    if [ -n "$(git status --porcelain)" ]; then
+        echo "[auto-commit] 检测到未提交变更，正在提交..."
+        git add -A
+        git commit -m "auto-commit before eval $(date +%Y%m%d_%H%M%S)"
+    else
+        echo "[auto-commit] 工作区干净，无需提交"
+    fi
+fi
+GIT_COMMIT_ID=$(git rev-parse --short HEAD)
+TIMESTAMP=$(date +%Y%m%d%H%M%S)
+
 # 判断是单题模式还是批量模式
 if [ -n "$QUESTION_INDEX" ]; then
     # ========== 单题模式 ==========
@@ -180,16 +197,25 @@ if [ -n "$QUESTION_INDEX" ]; then
     fi
     if [[ "$SAMPLE" =~ ^-?[0-9]+$ ]]; then
         # 数字索引用默认输出文件
-        OUTPUT_FILE=./result/locomo_qa_result.csv
+        if [ "$AUTO_COMMIT" = "true" ]; then
+            OUTPUT_FILE=./result/locomo_${SAMPLE}_${QUESTION_INDEX}_result_${TIMESTAMP}_${GIT_COMMIT_ID}.csv
+        else
+            OUTPUT_FILE=./result/locomo_${SAMPLE}_${QUESTION_INDEX}_result.csv
+        fi
         "$PYTHON_BIN" "$SCRIPT_DIR/run_eval.py" \
             "$INPUT_FILE" \
             --sample "$SAMPLE_ID_FOR_CMD" \
             --question-index "$QUESTION_INDEX" \
             --count 1 \
+            --output "$OUTPUT_FILE" \
             "${COMMON_OPTS[@]}"
     else
         # sample_id 模式直接更新批量结果文件
-        OUTPUT_FILE=./result/locomo_${SAMPLE}_result.csv
+        if [ "$AUTO_COMMIT" = "true" ]; then
+            OUTPUT_FILE=./result/locomo_${SAMPLE}_${QUESTION_INDEX}_result_${TIMESTAMP}_${GIT_COMMIT_ID}.csv
+        else
+            OUTPUT_FILE=./result/locomo_${SAMPLE}_${QUESTION_INDEX}_result.csv
+        fi
         "$PYTHON_BIN" "$SCRIPT_DIR/run_eval.py" \
             "$INPUT_FILE" \
             --sample "$SAMPLE_ID_FOR_CMD" \
@@ -287,7 +313,11 @@ PY
     else
         echo "[2/4] Running evaluation for all questions..."
     fi
-    OUTPUT_FILE=./result/locomo_${SAMPLE}_result.csv
+    if [ "$AUTO_COMMIT" = "true" ]; then
+        OUTPUT_FILE=./result/locomo_${SAMPLE}_result_${TIMESTAMP}_${GIT_COMMIT_ID}.csv
+    else
+        OUTPUT_FILE=./result/locomo_${SAMPLE}_result.csv
+    fi
     "$PYTHON_BIN" "$SCRIPT_DIR/run_eval.py" \
         "$INPUT_FILE" \
         --sample "$SAMPLE_ID_FOR_CMD" \

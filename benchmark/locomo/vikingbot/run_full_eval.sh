@@ -2,11 +2,18 @@
 
 set -e
 
+AUTO_COMMIT=false
+
+# 解析 --auto-commit 参数
+for arg in "$@"; do
+    if [ "$arg" = "--auto-commit" ]; then
+        AUTO_COMMIT=true
+    fi
+done
+
 # 基于脚本所在目录计算路径
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 INPUT_FILE="$SCRIPT_DIR/../data/locomo10.json"
-RESULT_FILE="./result/locomo_result_multi_read_all.csv"
-
 if command -v python3 >/dev/null 2>&1; then
     PYTHON_BIN="python3"
 elif command -v python >/dev/null 2>&1; then
@@ -72,8 +79,34 @@ INTERACTIVE="$INTERACTIVE" "$PYTHON_BIN" "$SCRIPT_DIR/preflight_eval_runtime.py"
 # shellcheck disable=SC1090
 source "$RUNTIME_ENV_FILE"
 
+# auto-commit 逻辑
+if [ "$AUTO_COMMIT" = "true" ]; then
+    if [ -n "$(git status --porcelain)" ]; then
+        echo "[auto-commit] 检测到未提交变更，正在提交..."
+        git add -A
+        git commit -m "auto-commit before eval $(date +%Y%m%d_%H%M%S)"
+    else
+        echo "[auto-commit] 工作区干净，无需提交"
+    fi
+fi
+GIT_COMMIT_ID=$(git rev-parse --short HEAD)
+TIMESTAMP=$(date +%Y%m%d%H%M%S)
+
+# 根据是否 auto-commit 决定结果文件名
+if [ "$AUTO_COMMIT" = "true" ]; then
+    RESULT_FILE="./result/locomo_result_${TIMESTAMP}_${GIT_COMMIT_ID}.csv"
+else
+    RESULT_FILE="./result/locomo_result_multi_read_all.csv"
+fi
+
 # Step 1: 导入数据（可跳过）
-if [ "$1" != "--skip-import" ]; then
+SKIP_IMPORT=false
+for arg in "$@"; do
+    if [ "$arg" = "--skip-import" ]; then
+        SKIP_IMPORT=true
+    fi
+done
+if [ "$SKIP_IMPORT" != "true" ]; then
     echo "[1/4] 导入数据..."
     "$PYTHON_BIN" "$SCRIPT_DIR/import_to_ov.py" --input "$INPUT_FILE" --force-ingest --account "$ACCOUNT" --openviking-url "$OPENVIKING_URL"
     echo "等待 1 分钟..."
