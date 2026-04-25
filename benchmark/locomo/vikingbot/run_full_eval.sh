@@ -12,6 +12,24 @@
 
 set -e
 
+# --help 提前处理，避免触发 Python preflight
+for arg in "$@"; do
+    if [ "$arg" = "--help" ] || [ "$arg" = "-h" ]; then
+        sed -n '2,10p' "$0" | sed 's/^# \?//'
+        echo ""
+        echo "位置参数:"
+        echo "  sample_index      数字索引 (0,1,2...)"
+        echo "  sample_id         样本ID (如 conv-26)"
+        echo "  question_index    问题索引 (可选)，不传则测试该 sample 的所有问题"
+        echo ""
+        echo "开关参数:"
+        echo "  --skip-import     跳过导入步骤，直接使用已导入的数据进行评测"
+        echo "  --single-chat     单聊模式，不设置 role_id/speaker，不传 --memory-user"
+        echo "  --auto-commit     自动提交未提交的代码变更，结果文件名带 commit id 和时间戳"
+        exit 0
+    fi
+done
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SKIP_IMPORT=false
 SINGLE_CHAT=false
