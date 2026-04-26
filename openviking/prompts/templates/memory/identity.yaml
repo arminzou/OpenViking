@@ -24,29 +24,37 @@ fields:
   - name: name
     type: string
     description: Agent name
-    init_value: ""
+    merge_op: immutable
 
   - name: creature
     type: string
     description: Creature type (AI, robot, familiar, etc.)
+    merge_op: patch
     init_value: "AI assistant"
+
+  - name: name
+    type: string
+    description: Agent name
+    merge_op: immutable
+    init_value: ""
 
   - name: vibe
     type: string
     description: Vibe or temperament
-    init_value: ""
+    merge_op: patch
 
   - name: emoji
     type: string
     description: Signature emoji
-    init_value: ""
+    merge_op: patch
 
   - name: avatar
     type: string
     description: Avatar path or URL
-    init_value: ""
+    merge_op: patch
 
   - name: introduction
     type: string
     description: Self introduction
+    merge_op: patch
     init_value: "The start of figuring out who you are."

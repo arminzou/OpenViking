@@ -16,12 +16,6 @@ enabled: true
 # upsert 表示新增或更新（默认行为）
 operation_mode: "add_only"
 content_template: |
-  {% if time_references %}## Time References
-  {{ time_references }}
-  {% endif %}
-  {% if causal_relationships %}## Causal Relationships
-  {{ causal_relationships }}
-  {% endif %}
   time: {{extract_context.get_first_message_time_with_weekday_from_ranges(ranges|default(''))|default('N/A')}}
   {{ extract_context.read_message_ranges(ranges|default('')).pretty_print() if ranges else '' }}
 
@@ -51,27 +45,10 @@ fields:
       Based on the content of the above fields, compile a description to outline the complete Fact content.
       Use specific year-month-day dates instead of vague terms such as yesterday, last week, and tomorrow.
 
-  - name: time_references
-    type: string
-    description: |
-      Extract ALL events that have time references from the conversation.
-      Format each as: "event_content -> absolute_date"
-      Example: "met up with friends -> 2023-08-27", "started transitioning -> 2020-08", "school event last week -> 2023-08-20"
-      Convert relative times (last week, three years ago, yesterday) to absolute dates based on the conversation timestamp.
-      If no time mentioned, leave empty.
-
-  - name: causal_relationships
-    type: string
-    description: |
-      Extract implicit causal relationships from the conversation.
-      Format each as: "cause -> effect"
-      Example: "received support -> now wants to help others", "had therapy -> became more self-aware"
-      Focus on "because of X, now Y" patterns that enable counterfactual reasoning.
-      If no causal relationships, leave empty.
-
   - name: ranges
     type: string
     description: |
       Conversation message index ranges to extract, format: "start-end,start-end,..."
       Example: "0-3,40-45" means extract messages 0-3 and 40-45.
     merge_op: immutable
+
