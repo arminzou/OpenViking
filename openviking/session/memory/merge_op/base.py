@@ -64,6 +64,11 @@ class StrPatch(BaseModel):
     """String patch containing multiple SEARCH/REPLACE blocks.
 
     All string fields with merge_op=patch use this structure.
+
+    IMPORTANT format rules for blocks:
+    - Each block MUST have both "search" and "replace" fields
+    - ✅ Correct: {"blocks": [{"search": "old text", "replace": "new text"}]}
+    - ❌ Wrong: {"blocks": ["just a string"]} or {"blocks": [{"search": "old"}]} (missing replace)
     """
 
     blocks: List[SearchReplaceBlock] = Field(
