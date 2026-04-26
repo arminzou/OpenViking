@@ -7,7 +7,7 @@
 #   ./run_full_eval.sh conv-26                      # 评测 sample_id conv-26 所有问题
 #   ./run_full_eval.sh 0 2                          # 评测 sample 0 的第 2 题
 #   ./run_full_eval.sh 0 --skip-import              # 跳过导入，批量评测
-#   ./run_full_eval.sh 0 2 --skip-import --single-chat  # 跳过导入，单题单聊模式
+#   ./run_full_eval.sh 0 2 --skip-import --group-chat   # 跳过导入，单题群聊模式
 #   ./run_full_eval.sh --skip-import --auto-commit  # 评测全部，跳过导入，自动提交
 
 set -e
@@ -24,7 +24,7 @@ for arg in "$@"; do
         echo ""
         echo "开关参数:"
         echo "  --skip-import     跳过导入步骤，直接使用已导入的数据进行评测"
-        echo "  --single-chat     单聊模式，不设置 role_id/speaker，不传 --memory-user"
+        echo "  --group-chat      群聊模式，设置 role_id/speaker，传 --memory-user"
         echo "  --auto-commit     自动提交未提交的代码变更，结果文件名带 commit id 和时间戳"
         exit 0
     fi
@@ -32,7 +32,7 @@ done
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SKIP_IMPORT=false
-SINGLE_CHAT=false
+SINGLE_CHAT=true
 AUTO_COMMIT=false
 
 if command -v python3 >/dev/null 2>&1; then
@@ -104,8 +104,8 @@ source "$RUNTIME_ENV_FILE"
 for arg in "$@"; do
     if [ "$arg" = "--skip-import" ]; then
         SKIP_IMPORT=true
-    elif [ "$arg" = "--single-chat" ]; then
-        SINGLE_CHAT=true
+    elif [ "$arg" = "--group-chat" ]; then
+        SINGLE_CHAT=false
     elif [ "$arg" = "--auto-commit" ]; then
         AUTO_COMMIT=true
     fi
@@ -114,7 +114,7 @@ done
 # 过滤掉开关参数，获取位置参数
 ARGS=()
 for arg in "$@"; do
-    if [ "$arg" != "--skip-import" ] && [ "$arg" != "--single-chat" ] && [ "$arg" != "--auto-commit" ]; then
+    if [ "$arg" != "--skip-import" ] && [ "$arg" != "--group-chat" ] && [ "$arg" != "--auto-commit" ]; then
         ARGS+=("$arg")
     fi
 done
