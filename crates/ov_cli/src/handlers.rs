@@ -82,6 +82,7 @@ pub async fn handle_add_resource(
         ctx.config.account.clone(),
         ctx.config.user.clone(),
         effective_timeout,
+        ctx.config.extra_headers.clone(),
     );
     commands::resources::add_resource(
         &client,
@@ -327,8 +328,8 @@ pub async fn handle_admin(cmd: AdminCommands, ctx: CliContext) -> Result<()> {
             )
             .await
         }
-        AdminCommands::ListUsers { account_id } => {
-            commands::admin::list_users(&client, &account_id, ctx.output_format, ctx.compact).await
+        AdminCommands::ListUsers { account_id, limit, name, role } => {
+            commands::admin::list_users(&client, &account_id, limit, name, role, ctx.output_format, ctx.compact).await
         }
         AdminCommands::RemoveUser {
             account_id,
@@ -507,7 +508,7 @@ pub async fn handle_write(
     uri: String,
     content: Option<String>,
     from_file: Option<String>,
-    append: bool,
+    mode: String,
     wait: bool,
     timeout: Option<f64>,
     ctx: CliContext,
@@ -527,7 +528,7 @@ pub async fn handle_write(
         &client,
         &uri,
         &payload,
-        append,
+        &mode,
         wait,
         timeout,
         ctx.output_format,

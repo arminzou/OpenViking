@@ -31,6 +31,7 @@ from vikingbot.config.schema import (
     BotChannelConfig,
     Config,
     SessionKey,
+    requires_gateway_token,
 )
 
 
@@ -40,6 +41,7 @@ class PendingResponse:
     def __init__(self):
         self.events: List[Dict[str, Any]] = []
         self.final_content: Optional[str] = None
+        self.relevant_memories: Optional[str] = None
         self.event = asyncio.Event()
         self.stream_queue: asyncio.Queue[Optional[ChatStreamEvent]] = asyncio.Queue()
 
@@ -64,7 +66,6 @@ class OpenAPIChannelConfig(BaseChannelConfig):
 
     enabled: bool = True
     type: str = "cli"
-    api_key: str = ""  # If empty, no auth required
     allow_from: list[str] = []
     max_concurrent_requests: int = 100
     _channel_id: str = "default"
@@ -188,6 +189,7 @@ class OpenAPIChannel(BaseChannel):
                 msg.event_type == OutboundEventType.RESPONSE
                 or msg.event_type == OutboundEventType.NO_REPLY
             ):
+                pending.relevant_memories = (msg.metadata or {}).get("relevant_memories")
                 await pending.add_event("response", msg.content or "")
                 pending.set_final(msg.content or "")
                 await pending.close_stream()
@@ -209,6 +211,7 @@ class OpenAPIChannel(BaseChannel):
 
         if msg.event_type == OutboundEventType.RESPONSE:
             # Final response - add to stream first
+            pending.relevant_memories = (msg.metadata or {}).get("relevant_memories")
             await pending.add_event("response", msg.content or "")
             pending.set_final(msg.content or "")
             await pending.close_stream()
@@ -230,17 +233,27 @@ class OpenAPIChannel(BaseChannel):
         router = APIRouter()
         channel = self  # Capture for closures
 
-        async def verify_api_key(x_api_key: Optional[str] = Header(None)) -> bool:
+        async def verify_api_key(
+            x_gateway_token: Optional[str] = Header(None, alias="X-Gateway-Token")
+        ) -> bool:
             """Verify API key for privileged HTTP chat/session routes."""
-            if not channel.config.api_key:
-                raise HTTPException(
-                    status_code=503,
-                    detail="OpenAPI channel API key is not configured",
-                )
-            if not x_api_key:
-                raise HTTPException(status_code=401, detail="X-API-Key header required")
+            gateway_token = ""
+            gateway_host = "127.0.0.1"
+            if channel._global_config is not None:
+                gateway = getattr(channel._global_config, "gateway", None)
+                gateway_host = getattr(gateway, "host", "127.0.0.1") or "127.0.0.1"
+                gateway_token = getattr(gateway, "token", "") or ""
+            if not gateway_token:
+                if requires_gateway_token(gateway_host, gateway_token):
+                    raise HTTPException(
+                        status_code=503,
+                        detail="OpenAPI gateway token is required when host is non-localhost",
+                    )
+                return True
+            if not x_gateway_token:
+                raise HTTPException(status_code=401, detail="X-Gateway-Token header required")
             # Use secrets.compare_digest for timing-safe comparison
-            if not secrets.compare_digest(x_api_key, channel.config.api_key):
+            if not secrets.compare_digest(x_gateway_token, gateway_token):
                 raise HTTPException(status_code=403, detail="Invalid API key")
             return True
 
@@ -340,29 +353,10 @@ class OpenAPIChannel(BaseChannel):
 
         # ========== Bot Channel Routes ==========
 
-        async def verify_bot_channel_api_key(
-            x_api_key: Optional[str] = Header(None),
-        ) -> Optional[str]:
-            """Capture the raw bot-channel API key header for per-channel verification."""
-            return x_api_key
-
-        def ensure_bot_channel_api_key(channel_id: str, x_api_key: Optional[str]) -> None:
-            """Require an explicit per-channel API key for privileged bot HTTP routes."""
-            bot_config = channel._bot_configs[channel_id]
-            if not bot_config.api_key:
-                raise HTTPException(
-                    status_code=503,
-                    detail=f"Bot channel '{channel_id}' API key is not configured",
-                )
-            if not x_api_key:
-                raise HTTPException(status_code=401, detail="X-API-Key header required")
-            if not secrets.compare_digest(x_api_key, bot_config.api_key):
-                raise HTTPException(status_code=403, detail="Invalid API key")
-
         @router.post("/chat/channel", response_model=ChatResponse)
         async def chat_channel(
             request: ChatRequest,
-            x_api_key: Optional[str] = Depends(verify_bot_channel_api_key),
+            authorized: bool = Depends(verify_api_key),
         ):
             """Send a chat message to a specific bot channel and get a response."""
             channel_id = request.channel_id
@@ -371,14 +365,12 @@ class OpenAPIChannel(BaseChannel):
             if channel_id not in channel._bot_configs:
                 raise HTTPException(status_code=404, detail=f"Channel '{channel_id}' not found")
 
-            ensure_bot_channel_api_key(channel_id, x_api_key)
-
             return await channel._handle_bot_chat(channel_id, request)
 
         @router.post("/chat/channel/stream")
         async def chat_channel_stream(
             request: ChatRequest,
-            x_api_key: Optional[str] = Depends(verify_bot_channel_api_key),
+            authorized: bool = Depends(verify_api_key),
         ):
             """Send a chat message to a specific bot channel and get a streaming response."""
             channel_id = request.channel_id
@@ -386,8 +378,6 @@ class OpenAPIChannel(BaseChannel):
                 raise HTTPException(status_code=400, detail="channel_id is required")
             if channel_id not in channel._bot_configs:
                 raise HTTPException(status_code=404, detail=f"Channel '{channel_id}' not found")
-
-            ensure_bot_channel_api_key(channel_id, x_api_key)
 
             if not request.stream:
                 request.stream = True
@@ -467,6 +457,7 @@ class OpenAPIChannel(BaseChannel):
                 session_id=session_id,
                 message=response_content,
                 events=pending.events if pending.events else None,
+                relevant_memories=pending.relevant_memories,
             )
 
         except HTTPException:
@@ -608,6 +599,7 @@ class OpenAPIChannel(BaseChannel):
                 session_id=session_id,
                 message=response_content,
                 events=pending.events if pending.events else None,
+                relevant_memories=pending.relevant_memories,
             )
 
         except HTTPException:

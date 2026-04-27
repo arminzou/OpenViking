@@ -35,6 +35,43 @@ class MetricsAccountDimensionConfig(BaseModel):
     model_config = {"extra": "forbid"}
 
 
+class PrometheusExporterConfig(BaseModel):
+    """Prometheus exporter configuration."""
+
+    enabled: bool = True
+
+    model_config = {"extra": "forbid"}
+
+
+class OTelExporterConfig(BaseModel):
+    """OpenTelemetry exporter configuration."""
+
+    class TLSConfig(BaseModel):
+        """TLS configuration for OTLP exporters."""
+
+        insecure: bool = False
+
+        model_config = {"extra": "forbid"}
+
+    enabled: bool = False
+    protocol: str = "grpc"  # "grpc" or "http"
+    tls: TLSConfig = Field(default_factory=TLSConfig)
+    endpoint: str = "localhost:4317"  # gRPC default: 4317; HTTP default: 4318
+    service_name: str = "openviking-server"
+    export_interval_ms: int = 10000
+
+    model_config = {"extra": "forbid"}
+
+
+class MetricsExportersConfig(BaseModel):
+    """Metrics exporters configuration."""
+
+    prometheus: PrometheusExporterConfig = Field(default_factory=PrometheusExporterConfig)
+    otel: OTelExporterConfig = Field(default_factory=OTelExporterConfig)
+
+    model_config = {"extra": "forbid"}
+
+
 class MetricsConfig(BaseModel):
     """Metrics subsystem configuration."""
 
@@ -42,6 +79,7 @@ class MetricsConfig(BaseModel):
     account_dimension: MetricsAccountDimensionConfig = Field(
         default_factory=MetricsAccountDimensionConfig
     )
+    exporters: MetricsExportersConfig = Field(default_factory=MetricsExportersConfig)
 
     model_config = {"extra": "forbid"}
 
@@ -50,6 +88,8 @@ class ObservabilityConfig(BaseModel):
     """Server-side observability configuration."""
 
     metrics: MetricsConfig = Field(default_factory=MetricsConfig)
+    traces: OTelExporterConfig = Field(default_factory=OTelExporterConfig)
+    logs: OTelExporterConfig = Field(default_factory=OTelExporterConfig)
 
     model_config = {"extra": "forbid"}
 
@@ -150,6 +190,22 @@ _LOCALHOST_HOSTS = {"127.0.0.1", "localhost", "::1"}
 def _is_localhost(host: str) -> bool:
     """Return True if *host* resolves to a loopback address."""
     return host in _LOCALHOST_HOSTS
+
+
+def load_bot_gateway_token(config_path: Optional[str] = None) -> str:
+    """Load bot gateway token from ov.conf bot.gateway.token."""
+    path = resolve_config_path(config_path, OPENVIKING_CONFIG_ENV, DEFAULT_OV_CONF)
+    if path is None:
+        return ""
+
+    data = load_json_config(path)
+    bot_config = data.get("bot", {})
+    if not isinstance(bot_config, dict):
+        return ""
+    gateway_config = bot_config.get("gateway", {})
+    if not isinstance(gateway_config, dict):
+        return ""
+    return gateway_config.get("token", "") or ""
 
 
 def validate_server_config(config: ServerConfig) -> None:
