@@ -76,7 +76,7 @@ def load_locomo_data(
 def build_session_messages(
     item: Dict[str, Any],
     session_range: Optional[Tuple[int, int]] = None,
-    single_chat: bool = False,
+    single_chat: bool = True,
 ) -> List[Dict[str, Any]]:
     """Build session messages for one LoCoMo sample.
 
@@ -730,8 +730,8 @@ def main():
     parser.add_argument(
         "--single-chat",
         action="store_true",
-        default=False,
-        help="Single-chat mode: no role_id/speaker on messages. Default is group-chat mode.",
+        default=True,
+        help="Single-chat mode: no role_id/speaker on messages. Default is single-chat mode.",
     )
     parser.add_argument(
         "--clear-ingest-record",

@@ -372,8 +372,8 @@ def main():
     parser.add_argument(
         "--single-chat",
         action="store_true",
-        default=False,
-        help="Single-chat mode: no --memory-user passed to vikingbot chat. Default is group-chat mode.",
+        default=True,
+        help="Single-chat mode: no --memory-user passed to vikingbot chat. Default is single-chat mode.",
     )
     args = parser.parse_args()
 

@@ -157,14 +157,14 @@ if [ -z "$SAMPLE" ]; then
         echo "[1/4] 跳过导入数据..."
     else
         echo "[1/4] 导入数据..."
-        "$PYTHON_BIN" "$SCRIPT_DIR/import_to_ov.py" --input "$INPUT_FILE" --force-ingest --account "$ACCOUNT" --openviking-url "$OPENVIKING_URL"
+        "$PYTHON_BIN" "$SCRIPT_DIR/import_to_ov.py" --input "$INPUT_FILE" --force-ingest --account "$ACCOUNT" --openviking-url "$OPENVIKING_URL" "${COMMON_OPTS[@]}"
         echo "等待 1 分钟..."
         sleep 60
     fi
 
     # 评估
     echo "[2/4] 评估..."
-    "$PYTHON_BIN" "$SCRIPT_DIR/run_eval.py" "$INPUT_FILE" --output "$RESULT_FILE"
+    "$PYTHON_BIN" "$SCRIPT_DIR/run_eval.py" "$INPUT_FILE" --output "$RESULT_FILE" "${COMMON_OPTS[@]}"
 
     # 裁判打分
     echo "[3/4] 裁判打分..."
