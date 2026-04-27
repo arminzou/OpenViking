@@ -406,7 +406,7 @@ pub async fn handle_privacy(cmd: PrivacyCommands, ctx: CliContext) -> Result<()>
             target_key,
             values_json,
             values_file,
-            lable,
+            key,
             change_reason,
             labels_json,
         } => {
@@ -416,7 +416,7 @@ pub async fn handle_privacy(cmd: PrivacyCommands, ctx: CliContext) -> Result<()>
                 &target_key,
                 values_json.as_deref(),
                 values_file.as_deref(),
-                &lable,
+                &key,
                 &change_reason,
                 labels_json.as_deref(),
                 ctx.output_format,

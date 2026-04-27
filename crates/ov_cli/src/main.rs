@@ -671,8 +671,8 @@ enum PrivacyCommands {
         #[arg(long = "values-file", conflicts_with = "values_json")]
         values_file: Option<String>,
         /// Existing key updates in key=value format (repeatable)
-        #[arg(long = "lable")]
-        lable: Vec<String>,
+        #[arg(long = "key")]
+        key: Vec<String>,
         /// Change reason
         #[arg(long, default_value = "")]
         change_reason: String,
@@ -830,7 +830,7 @@ fn preprocess_privacy_get_shortcut(args: Vec<OsString>) -> Vec<OsString> {
     out
 }
 
-fn preprocess_privacy_upsert_lable_flags(args: Vec<OsString>) -> Vec<OsString> {
+fn preprocess_privacy_upsert_key_flags(args: Vec<OsString>) -> Vec<OsString> {
     let Some(cmd_idx) = find_command_index(&args) else {
         return args;
     };
@@ -852,8 +852,8 @@ fn preprocess_privacy_upsert_lable_flags(args: Vec<OsString>) -> Vec<OsString> {
             continue;
         }
 
-        if i > cmd_idx + 1 && arg_lossy.starts_with("--lable-") {
-            let suffix = &arg_lossy[8..];
+        if i > cmd_idx + 1 && arg_lossy.starts_with("--key-") {
+            let suffix = &arg_lossy[6..];
             if suffix.is_empty() {
                 converted.push(args[i].clone());
                 i += 1;
@@ -861,7 +861,7 @@ fn preprocess_privacy_upsert_lable_flags(args: Vec<OsString>) -> Vec<OsString> {
             }
 
             if let Some((key, value)) = suffix.split_once('=') {
-                converted.push(OsString::from("--lable"));
+                converted.push(OsString::from("--key"));
                 converted.push(OsString::from(format!("{}={}", key, value)));
                 i += 1;
                 continue;
@@ -869,7 +869,7 @@ fn preprocess_privacy_upsert_lable_flags(args: Vec<OsString>) -> Vec<OsString> {
 
             if i + 1 < args.len() {
                 let next_val = args[i + 1].to_string_lossy();
-                converted.push(OsString::from("--lable"));
+                converted.push(OsString::from("--key"));
                 converted.push(OsString::from(format!("{}={}", suffix, next_val)));
                 i += 2;
                 continue;
@@ -889,7 +889,7 @@ fn preprocess_privacy_upsert_lable_flags(args: Vec<OsString>) -> Vec<OsString> {
 
 fn preprocess_privacy_args(args: Vec<OsString>) -> Vec<OsString> {
     let args = preprocess_privacy_get_shortcut(args);
-    preprocess_privacy_upsert_lable_flags(args)
+    preprocess_privacy_upsert_key_flags(args)
 }
 
 #[tokio::main]
@@ -1276,14 +1276,14 @@ mod tests {
     }
 
     #[test]
-    fn preprocess_lable_dynamic_flag_to_static_form() {
+    fn preprocess_key_dynamic_flag_to_static_form() {
         let args = vec![
             OsString::from("ov"),
             OsString::from("privacy"),
             OsString::from("upsert"),
             OsString::from("skill"),
             OsString::from("demo"),
-            OsString::from("--lable-api_key"),
+            OsString::from("--key-api_key"),
             OsString::from("secret-v1"),
         ];
 
@@ -1301,21 +1301,21 @@ mod tests {
                 "upsert",
                 "skill",
                 "demo",
-                "--lable",
+                "--key",
                 "api_key=secret-v1",
             ]
         );
     }
 
     #[test]
-    fn cli_parses_privacy_upsert_with_lable_dynamic_flag() {
+    fn cli_parses_privacy_upsert_with_key_dynamic_flag() {
         let cli = Cli::parse_from(preprocess_privacy_args(vec![
             OsString::from("ov"),
             OsString::from("privacy"),
             OsString::from("upsert"),
             OsString::from("skill"),
             OsString::from("demo"),
-            OsString::from("--lable-api_key"),
+            OsString::from("--key-api_key"),
             OsString::from("secret-v2"),
         ]));
 
@@ -1324,12 +1324,12 @@ mod tests {
                 PrivacyCommands::Upsert {
                     category,
                     target_key,
-                    lable,
+                    key,
                     ..
                 } => {
                     assert_eq!(category, "skill");
                     assert_eq!(target_key, "demo");
-                    assert_eq!(lable, vec!["api_key=secret-v2"]);
+                    assert_eq!(key, vec!["api_key=secret-v2"]);
                 }
                 _ => panic!("expected privacy upsert"),
             },

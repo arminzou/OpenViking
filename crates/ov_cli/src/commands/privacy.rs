@@ -8,11 +8,11 @@ fn parse_kv_pairs(pairs: &[String]) -> Result<HashMap<String, String>> {
     let mut parsed: HashMap<String, String> = HashMap::new();
     for pair in pairs {
         let (key, value) = pair.split_once('=').ok_or_else(|| {
-            Error::Client(format!("Invalid --lable format: {} (expected key=value)", pair))
+            Error::Client(format!("Invalid --key format: {} (expected key=value)", pair))
         })?;
         let key = key.trim();
         if key.is_empty() {
-            return Err(Error::Client("--lable key cannot be empty".to_string()));
+            return Err(Error::Client("--key key cannot be empty".to_string()));
         }
         parsed.insert(key.to_string(), value.to_string());
     }
@@ -282,7 +282,7 @@ pub async fn upsert(
     target_key: &str,
     values_json: Option<&str>,
     values_file: Option<&str>,
-    lable_pairs: &[String],
+    key_pairs: &[String],
     change_reason: &str,
     labels_json: Option<&str>,
     output_format: OutputFormat,
@@ -291,14 +291,14 @@ pub async fn upsert(
     let parsed_values = parse_values_json(values_json, values_file)?;
     let mut final_values: Map<String, Value> = parsed_values.clone().unwrap_or_default();
 
-    let lable_overrides = parse_kv_pairs(lable_pairs)?;
+    let key_overrides = parse_kv_pairs(key_pairs)?;
     let mut requested_keys: HashSet<String> = HashSet::new();
     if let Some(values_from_json) = parsed_values.as_ref() {
         requested_keys.extend(values_from_json.keys().cloned());
     }
-    requested_keys.extend(lable_overrides.keys().cloned());
+    requested_keys.extend(key_overrides.keys().cloned());
 
-    if !lable_overrides.is_empty() {
+    if !key_overrides.is_empty() {
         let current = client.privacy_get_current(category, target_key).await?;
         let mut base_values = current
             .get("current")
@@ -314,7 +314,7 @@ pub async fn upsert(
                 base_values.insert(key, value);
             }
         }
-        for (key, value) in lable_overrides {
+        for (key, value) in key_overrides {
             base_values.insert(key, Value::String(value));
         }
         final_values = base_values;
@@ -322,7 +322,7 @@ pub async fn upsert(
 
     if final_values.is_empty() {
         return Err(Error::Client(
-            "No values provided; use --values-json/--values-file or --lable-{key} <value>"
+            "No values provided; use --values-json/--values-file or --key-{key} <value>"
                 .to_string(),
         ));
     }

@@ -374,7 +374,7 @@ openviking privacy upsert skill byted-viking-search-knowledgebase \
 
 # Partial key update (CLI merges with current first)
 openviking privacy upsert skill byted-viking-search-knowledgebase \
-  --lable-api_key secret-3
+  --key-api_key secret-3
 
 # Version query and activation
 openviking privacy versions skill byted-viking-search-knowledgebase

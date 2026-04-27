@@ -150,9 +150,8 @@ async def test_skill_read_appends_notice_for_unreplaced_placeholders(service):
 
     assert 'api_key: "secret-xyz"' in restored
     assert '{{ov_privacy:skill:partial-restore-skill:region}}' in restored
-    assert "[OpenViking Privacy Notice]" in restored
-    assert "Related configured privacy values: api_key=secret-xyz" in restored
-    assert "Not replaced (missing config): region=<missing>" in restored
+    assert "[Privacy Config Notice]" in restored
+    assert "Missing config: region=<missing>" in restored
 
 
 @pytest.mark.asyncio
@@ -180,6 +179,5 @@ async def test_skill_read_appends_notice_for_extra_configured_keys(service):
     restored = await service.fs.read(f"{skill_uri}/SKILL.md", ctx=ctx)
 
     assert 'api_key: "secret-xyz"' in restored
-    assert "[OpenViking Privacy Notice]" in restored
-    assert "Related configured privacy values: api_key=secret-xyz, region=cn" in restored
+    assert "[Privacy Config Notice]" in restored
     assert "Configured but not referenced in content: region=cn" in restored

@@ -374,7 +374,7 @@ openviking privacy upsert skill byted-viking-search-knowledgebase \
 
 # 仅更新部分 key（先读取 current 再合并）
 openviking privacy upsert skill byted-viking-search-knowledgebase \
-  --lable-api_key secret-3
+  --key-api_key secret-3
 
 # 版本查询与切换
 openviking privacy versions skill byted-viking-search-knowledgebase
