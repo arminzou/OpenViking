@@ -324,7 +324,7 @@ class VikingClient:
         all_agent_memories = []
 
         for uri in user_uris + [agent_uri]:
-            result = await self.search(query=query, target_uri=uri)
+            result = await self.search(query=query, target_uri=uri, limit=limit)
             memories = result.get("memories", [])
             if uri.startswith("viking://agent/"):
                 all_agent_memories.extend(memories)
