@@ -129,7 +129,6 @@ async def upsert_privacy_config(
             updated_by=_ctx.user.user_id,
             change_reason=request.change_reason,
             labels=request.labels,
-            enforce_existing_keys=True,
         )
     return Response(status="ok", result=None if result is None else result.to_dict())
 

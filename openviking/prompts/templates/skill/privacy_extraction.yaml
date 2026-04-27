@@ -60,7 +60,6 @@ template: |
     - "Access Key" -> "access_key"
     - "Secret Key" -> "secret_key"
   - Do not invent concrete secret values.
-  - Do not copy example values unless the document clearly indicates they are real configuration values intended to be used as-is.
   - Ignore ordinary business input parameters that are not user-maintained configuration, such as one-time query inputs like query, limit, or request payload examples.
   - If no user-maintained private config items are present, return an empty object.
 

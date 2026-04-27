@@ -5,7 +5,7 @@
 import json
 from typing import Any, Optional
 
-from openviking_cli.exceptions import InvalidArgumentError, NotFoundError
+from openviking_cli.exceptions import NotFoundError
 
 from openviking.privacy.helpers import (
     canonicalize_values,
@@ -128,27 +128,11 @@ class UserPrivacyConfigService:
         updated_by: str = "",
         change_reason: str = "",
         labels: Optional[dict[str, Any]] = None,
-        enforce_existing_keys: bool = False,
     ) -> UserPrivacyConfigVersion:
         await self._ensure_root(ctx, category, target_key)
         now = get_current_timestamp()
         meta = await self.get_meta(ctx, category, target_key)
         current = await self.get_current(ctx, category, target_key)
-
-        if current and enforce_existing_keys:
-            existing_keys = set(current.values.keys())
-            invalid_keys = sorted(key for key in values.keys() if key not in existing_keys)
-            if invalid_keys:
-                keys_display = ", ".join(invalid_keys)
-                raise InvalidArgumentError(
-                    f"Unknown privacy config keys in update: {keys_display}",
-                    details={
-                        "invalid_keys": invalid_keys,
-                        "allowed_keys": sorted(existing_keys),
-                        "category": category,
-                        "target_key": target_key,
-                    },
-                )
 
         if current and canonicalize_values(current.values) == canonicalize_values(values):
             if meta is None:
