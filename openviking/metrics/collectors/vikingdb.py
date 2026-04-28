@@ -34,9 +34,7 @@ class VikingDBCollector(StateMetricCollector):
 
     data_source: VikingDBStateDataSource
     config: CollectorConfig = CollectorConfig(ttl_seconds=10.0, timeout_seconds=0.8)
-    _last_collection: str = field(default="unknown", init=False, repr=False)
-    _last_account: str = field(default="default", init=False, repr=False)
-    _last_vectors: float = field(default=0.0, init=False, repr=False)
+    _last_samples: dict[str, tuple[str, float]] = field(default_factory=dict, init=False, repr=False)
 
     def read_metric_input(self):
         """Read the latest VikingDB collection state from the datasource."""
@@ -50,45 +48,50 @@ class VikingDBCollector(StateMetricCollector):
         to the last observed collection name and preserves last vectors count when present,
         emitting `valid="0"` to mark the data as stale.
         """
-        account_id, collection, ok, vectors = metric_input
-        self._last_collection = str(collection)
-        self._last_account = str(account_id)
-        self._last_vectors = float(vectors)
-        base = {"collection": str(collection)}
-        labels = {"collection": str(collection), "valid": "1"}
-        self.replace_gauge_series(
-            registry,
-            self.COLLECTION_HEALTH,
-            1.0 if ok else 0.0,
-            match_labels=base,
-            labels=labels,
-            label_names=("collection", "valid"),
-            account_id=self._last_account,
-        )
-        self.replace_gauge_series(
-            registry,
-            self.COLLECTION_VECTORS,
-            float(vectors),
-            match_labels=base,
-            labels=labels,
-            label_names=("collection", "valid"),
-            account_id=self._last_account,
-        )
+        current_samples: dict[str, tuple[str, float]] = {}
+        for account_id, collection, ok, vectors in metric_input:
+            account = str(account_id)
+            coll = str(collection)
+            vec = float(vectors)
+            current_samples[account] = (coll, vec)
+            self._emit_account_gauges(registry, account, coll, 1.0 if ok else 0.0, vec, "1")
 
-    def collect_error_hook(self, registry, error: Exception) -> None:
-        """Delegate failure handling to the stale hook by re-raising the datasource error."""
-        raise error
+        # Remove series for accounts that disappeared from the latest datasource snapshot.
+        for removed_account in set(self._last_samples) - set(current_samples):
+            old_collection, _ = self._last_samples[removed_account]
+            base = {"collection": old_collection}
+            registry.gauge_delete_matching(
+                self.COLLECTION_HEALTH,
+                match_labels=base,
+                account_id=removed_account,
+            )
+            registry.gauge_delete_matching(
+                self.COLLECTION_VECTORS,
+                match_labels=base,
+                account_id=removed_account,
+            )
+        self._last_samples = current_samples
 
     def collect_stale_hook(self, registry, error: Exception) -> None:
         """Export stale VikingDB gauges under `valid=0` when datasource refresh fails."""
-        account_id = self._last_account
-        collection = self._last_collection
+        for account_id, (collection, vectors) in self._last_samples.items():
+            self._emit_account_gauges(registry, account_id, collection, 0.0, vectors, "0")
+
+    def _emit_account_gauges(
+        self,
+        registry,
+        account_id: str,
+        collection: str,
+        health: float,
+        vectors: float,
+        valid: str,
+    ) -> None:
         base = {"collection": collection}
-        labels = {"collection": collection, "valid": "0"}
+        labels = {"collection": collection, "valid": valid}
         self.replace_gauge_series(
             registry,
             self.COLLECTION_HEALTH,
-            0.0,
+            health,
             match_labels=base,
             labels=labels,
             label_names=("collection", "valid"),
@@ -97,7 +100,7 @@ class VikingDBCollector(StateMetricCollector):
         self.replace_gauge_series(
             registry,
             self.COLLECTION_VECTORS,
-            float(self._last_vectors),
+            vectors,
             match_labels=base,
             labels=labels,
             label_names=("collection", "valid"),

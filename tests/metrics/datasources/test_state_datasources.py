@@ -259,6 +259,123 @@ def test_vikingdb_state_datasource_uses_default_account_ctx_for_count(monkeypatc
 
     env = VikingDBStateDataSource(service=Service()).read_vikingdb_state()
     assert env.ok is True
-    assert env.value == ("acct_demo", "my_collection", True, 123)
+    assert env.value == [("acct_demo", "my_collection", True, 123)]
     ctx = captured["ctx"]
     assert getattr(ctx, "account_id", None) == "acct_demo"
+
+
+def test_vikingdb_state_datasource_fanout_reads_multiple_accounts(monkeypatch):
+    seen: list[tuple[str, str]] = []
+
+    class DummyVikingDB:
+        collection_name = "context"
+
+        async def health_check(self):
+            return True
+
+        async def count(self, filter=None, ctx=None):
+            seen.append(
+                (
+                    getattr(ctx, "account_id", ""),
+                    getattr(getattr(ctx, "user", None), "user_id", ""),
+                )
+            )
+            return {"acct_default": 11, "acct_a": 21, "acct_b": 31}.get(
+                getattr(ctx, "account_id", ""), 0
+            )
+
+    class APIKeyManager:
+        def get_accounts(self):
+            return [{"account_id": "acct_a"}, {"account_id": "acct_b"}]
+
+        def get_users(self, account_id, limit=1, expose_key=False):
+            return [{"user_id": f"user_{account_id[-1]}"}]
+
+    class App:
+        state = SimpleNamespace(api_key_manager=APIKeyManager())
+
+    class Service:
+        _vikingdb_manager = DummyVikingDB()
+
+    monkeypatch.setattr(
+        "openviking_cli.utils.config.get_openviking_config",
+        lambda: SimpleNamespace(default_account="acct_default", default_user="user_default"),
+    )
+
+    env = VikingDBStateDataSource(service=Service(), app=App()).read_vikingdb_state()
+    assert env.ok is True
+    assert env.value == [
+        ("acct_default", "context", True, 11),
+        ("acct_a", "context", True, 21),
+        ("acct_b", "context", True, 31),
+    ]
+    assert seen == [
+        ("acct_default", "user_default"),
+        ("acct_a", "user_a"),
+        ("acct_b", "user_b"),
+    ]
+
+
+def test_vikingdb_state_datasource_fanout_partial_failure_keeps_envelope_ok(monkeypatch):
+    class DummyVikingDB:
+        collection_name = "context"
+
+        async def health_check(self):
+            return True
+
+        async def count(self, filter=None, ctx=None):
+            if getattr(ctx, "account_id", "") == "acct_b":
+                raise RuntimeError("acct_b down")
+            return {"acct_default": 11, "acct_a": 21}.get(getattr(ctx, "account_id", ""), 0)
+
+    class APIKeyManager:
+        def get_accounts(self):
+            return [{"account_id": "acct_a"}, {"account_id": "acct_b"}]
+
+        def get_users(self, account_id, limit=1, expose_key=False):
+            return [{"user_id": f"user_{account_id[-1]}"}]
+
+    class App:
+        state = SimpleNamespace(api_key_manager=APIKeyManager())
+
+    class Service:
+        _vikingdb_manager = DummyVikingDB()
+
+    monkeypatch.setattr(
+        "openviking_cli.utils.config.get_openviking_config",
+        lambda: SimpleNamespace(default_account="acct_default", default_user="user_default"),
+    )
+
+    env = VikingDBStateDataSource(service=Service(), app=App()).read_vikingdb_state()
+    assert env.ok is True
+    assert env.value == [
+        ("acct_default", "context", True, 11),
+        ("acct_a", "context", True, 21),
+        ("acct_b", "context", True, 0),
+    ]
+    assert env.error_type == "RuntimeError"
+    assert "acct_b down" in (env.error_message or "")
+
+
+def test_vikingdb_state_datasource_fanout_all_fail_sets_envelope_not_ok(monkeypatch):
+    class DummyVikingDB:
+        collection_name = "context"
+
+        async def health_check(self):
+            raise RuntimeError("health down")
+
+        async def count(self, filter=None, ctx=None):
+            raise RuntimeError("count down")
+
+    class Service:
+        _vikingdb_manager = DummyVikingDB()
+
+    monkeypatch.setattr(
+        "openviking_cli.utils.config.get_openviking_config",
+        lambda: SimpleNamespace(default_account="acct_default", default_user="user_default"),
+    )
+
+    env = VikingDBStateDataSource(service=Service()).read_vikingdb_state()
+    assert env.ok is False
+    assert env.value == [("acct_default", "context", False, 0)]
+    assert env.error_type == "RuntimeError"
