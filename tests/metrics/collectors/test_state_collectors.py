@@ -354,6 +354,58 @@ def test_vikingdb_collector_stale_valid_zero_fallback_keeps_multi_account_vector
     )
 
 
+def test_vikingdb_collector_cold_start_failure_emits_default_stale_series(
+    registry, render_prometheus
+):
+    class DS:
+        def read_vikingdb_state(self):
+            raise RuntimeError("boom")
+
+    collector = VikingDBCollector(data_source=DS())
+    collector.collect(registry)
+    text = render_prometheus(registry)
+    assert (
+        'openviking_vikingdb_collection_health{account_id="__unknown__",collection="default",valid="0"} 0.0'
+        in text
+    )
+    assert (
+        'openviking_vikingdb_collection_vectors{account_id="__unknown__",collection="default",valid="0"} 0.0'
+        in text
+    )
+
+
+def test_vikingdb_collector_cold_start_fallback_is_removed_after_recovery(
+    registry, render_prometheus
+):
+    class DS:
+        def __init__(self):
+            self.fail = True
+
+        def read_vikingdb_state(self):
+            if self.fail:
+                raise RuntimeError("boom")
+            return [("default", "context", True, 10)]
+
+    ds = DS()
+    collector = VikingDBCollector(data_source=ds)
+    collector.collect(registry)
+    ds.fail = False
+    collector.collect(registry)
+    text = render_prometheus(registry)
+    assert (
+        'openviking_vikingdb_collection_health{account_id="__unknown__",collection="default",valid="0"}'
+        not in text
+    )
+    assert (
+        'openviking_vikingdb_collection_vectors{account_id="__unknown__",collection="default",valid="0"}'
+        not in text
+    )
+    assert (
+        'openviking_vikingdb_collection_vectors{account_id="__unknown__",collection="context",valid="1"} 10.0'
+        in text
+    )
+
+
 def test_vikingdb_collector_partial_fanout_failure_emits_stale_series_for_failed_account(
     registry, render_prometheus, configure_account_dimension
 ):
